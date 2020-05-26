@@ -3,7 +3,7 @@ import torch.nn as nn
 import numpy as np
 import os
 from envs.tetris import TetrisEnv
-from agent import Agent
+from cmaes import Agent
 import torch.optim as optim
 from tqdm import tqdm
 from datetime import datetime
