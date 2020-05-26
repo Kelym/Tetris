@@ -10,7 +10,7 @@ from datetime import datetime
 from torch.utils.tensorboard import SummaryWriter
 
 class DQN(Agent):
-    def __init__(self, featurizer, net_size=[32,32],lr=0.00016):
+    def __init__(self, featurizer, net_size=[32,32],lr=0.00015):
         super(DQN, self).__init__(featurizer)
         self.buffer = ReplayBuffer(self, self.N, featurizer)
         self.device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
@@ -26,7 +26,7 @@ class DQN(Agent):
                                     lr=lr)
         self.loss_fn = nn.MSELoss()
 
-        self.name = 'sample256.net={}.lr={}'.format('x'.join([str(a) for a in self.net_size]), lr)
+        self.name = 'sample256-warmup.net={}.lr={}'.format('x'.join([str(a) for a in self.net_size]), lr)
         self.run_name = 'runs/{}-{}'.format(self.name,
             datetime.now().strftime("%m%d-%H-%M-%S"))
         self.writer = SummaryWriter(self.run_name)
@@ -47,8 +47,8 @@ class DQN(Agent):
 
     def train(self, n_iter, train_every_iter, batch_size, cb_every_iter, discount = 0.95,
               epsilon=.95, epsilon_decay=(128, 0.1, 0.05),
-              expert_traj=0, warm_up_episodes=0, warm_up_epochs=1,
-              pdb_per_iter=10000000, sample_per_iter=256):
+              expert_traj=10, warm_up_episodes=1000, warm_up_epochs=1,
+              pdb_per_iter=10000000, sample_per_iter=512):
 
         if expert_traj > 0 and os.path.exists('Expert_buffer_{}.pth'.format(expert_traj)):
             self.buffer.load('Expert_buffer_{}.pth'.format(expert_traj))
