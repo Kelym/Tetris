@@ -221,6 +221,7 @@ class TetrisEnv(gym.Env):
         reward function
         """
         # TODO: change it to your own choice of rewards
+        return 0 if self.state.lost else (self.cleared_current_turn * 5 + 1) / 21
         s = self.cleared_current_turn ** 2 * 21 + 1
         return 0 if self.state.lost else s
 
