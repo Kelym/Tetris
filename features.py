@@ -53,7 +53,7 @@ def agg_height(tetris_state):
 
 def count_holes(tetris_state):
     bi_field = np.where(tetris_state.field != 0, 1, 0)
-    return np.sum(bi_field[1:] - bi_field[:-1] == 1)
+    return tetris_state.top.sum() - bi_field.sum()
 
 def wall_bump(tetris_state):
     top = tetris_state.top
@@ -64,7 +64,7 @@ def complete_lines(tetris_state, action):
     turn = tetris_state.turn + 1
     _height = landing_height(tetris_state, action)
     if _height + dummy_env.piece_height[tetris_state.next_piece][orient] >= dummy_env.n_rows:
-        return -100
+        return 0
     _field = tetris_state.field.copy()
     for i in range(dummy_env.piece_width[tetris_state.next_piece][orient]):
         for h in range(_height + dummy_env.piece_bottom[tetris_state.next_piece][orient][i],
@@ -132,7 +132,7 @@ def bcts_featurizer(tetris_state, action):
 
     # binary the field
     bi_field = np.where(_field != 0, 1, 0)
-    count_holes = np.sum(bi_field[1:] - bi_field[:-1] == 1)
+    count_holes = _top.sum() - bi_field.sum()# np.sum(bi_field[1:] - bi_field[:-1] == 1)
 
     # row holes
     row_holes = (bi_field[1:] - bi_field[:-1] == 1)
@@ -206,7 +206,7 @@ def dellacherie_featurizer(tetris_state, action):
 
     # binary the field
     bi_field = np.where(_field != 0, 1, 0)
-    count_holes = np.sum(bi_field[1:] - bi_field[:-1] == 1)
+    count_holes = _top.sum() - bi_field.sum()# np.sum(bi_field[1:] - bi_field[:-1] == 1)
 
     return [count_holes,
             _height,            # landing_height
