@@ -50,6 +50,7 @@ class DQN(Agent):
               expert_traj=10, warm_up_episodes=1000, warm_up_epochs=1,
               pdb_per_iter=10000000, sample_per_iter=2048):
 
+        epsilon = [float(e) for e in epsilon]
         epsilon, epsilon_decay = epsilon[0], list(epsilon[1:])
 
         if expert_traj > 0:
