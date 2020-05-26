@@ -4,9 +4,48 @@ from envs.tetris import TetrisEnv
 dummy_env = TetrisEnv()
 
 # =====================================================
+# Features recommended in (Zucker and Maas 2009)
+
+def column_featurizer(tetris_state, action):
+    orient, slot = action
+    # landing_height
+    _height = max(
+        tetris_state.top[slot+c] - dummy_env.piece_bottom[tetris_state.next_piece][orient][c]
+        for c in range(dummy_env.piece_width[tetris_state.next_piece][orient])
+    )
+    # adjust top
+    _top = tetris_state.top.copy()
+    for c in range(dummy_env.piece_width[tetris_state.next_piece][orient]):
+        _top[slot+c] = _height + dummy_env.piece_top[tetris_state.next_piece][orient][c]
+    # adjust field
+    if max(_top) < dummy_env.n_rows:
+        _field = tetris_state.field.copy()
+    else:
+        _field = np.zeros((max(_top), dummy_env.n_cols))
+        _field[:dummy_env.n_rows, :] = tetris_state.field.copy()
+    turn = tetris_state.turn + 1
+    for i in range(dummy_env.piece_width[tetris_state.next_piece][orient]):
+        for h in range(_height + dummy_env.piece_bottom[tetris_state.next_piece][orient][i],
+                       _height + dummy_env.piece_top[tetris_state.next_piece][orient][i]):
+            _field[h, i+slot] = turn
+    # complete and eroded
+    counter_complete_lines = 0
+    for i in range(dummy_env.n_rows):
+        if np.all(_field[i] > 0):
+            counter_complete_lines += 1
+    # binary the field
+    bi_field = np.where(_field != 0, 1, 0)
+    count_holes = _top.sum() - bi_field.sum()
+
+    features = np.concatenate((_top, np.abs(_top[:-1] - _top[1:]), [_top.max(), count_holes, counter_complete_lines]),axis=None)
+    return features
+
+# =====================================================
 # Features recommended in
 # https://codemyroad.wordpress.com/2013/04/14/tetris-ai-the-near-perfect-player/
-# with slight modification (since we are using Q learning instead)
+# Note that the article's optimal parameters only achieved hundreds of lines of clear average over 100 games ...
+# Because 1) they allowed look ahead (to know the next piece after the current one)
+#   and   2) they used a bag randomizer (permute the 7 pieces therefore easier game)
 
 def simple_featurizer(tetris_state, action):
     orient, slot = action
@@ -53,7 +92,7 @@ def agg_height(tetris_state):
 
 def count_holes(tetris_state):
     bi_field = np.where(tetris_state.field != 0, 1, 0)
-    return np.sum(bi_field[1:] - bi_field[:-1] == 1)
+    return tetris_state.top.sum() - bi_field.sum()
 
 def wall_bump(tetris_state):
     top = tetris_state.top
@@ -64,7 +103,7 @@ def complete_lines(tetris_state, action):
     turn = tetris_state.turn + 1
     _height = landing_height(tetris_state, action)
     if _height + dummy_env.piece_height[tetris_state.next_piece][orient] >= dummy_env.n_rows:
-        return -100
+        return 0
     _field = tetris_state.field.copy()
     for i in range(dummy_env.piece_width[tetris_state.next_piece][orient]):
         for h in range(_height + dummy_env.piece_bottom[tetris_state.next_piece][orient][i],
@@ -82,24 +121,29 @@ def complete_lines(tetris_state, action):
 
 def bcts_featurizer(tetris_state, action):
     orient, slot = action
-    _height = max(
+    _height = max( # landing_height
         tetris_state.top[slot+c] - dummy_env.piece_bottom[tetris_state.next_piece][orient][c]
         for c in range(dummy_env.piece_width[tetris_state.next_piece][orient])
-    ) # landing_height
-    if _height + dummy_env.piece_height[tetris_state.next_piece][orient] >= dummy_env.n_rows:
-        return [0] * 8 # dead
-    # adjust field
-    _field = tetris_state.field.copy()
-    turn = tetris_state.turn + 1
-    for i in range(dummy_env.piece_width[tetris_state.next_piece][orient]):
-        for h in range(_height + dummy_env.piece_bottom[tetris_state.next_piece][orient][i],
-                       _height + dummy_env.piece_top[tetris_state.next_piece][orient][i]):
-            _field[h, i+slot] = turn
+    )
     # adjust top
     _top = tetris_state.top.copy()
     for c in range(dummy_env.piece_width[tetris_state.next_piece][orient]):
         _top[slot+c] = _height + dummy_env.piece_top[tetris_state.next_piece][orient][c]
 
+    if max(_top) >= dummy_env.n_rows:
+        return [200, 200, 200, 200, 200, 0, 200, 200]
+
+    # adjust field
+    if max(_top) < dummy_env.n_rows:
+        _field = tetris_state.field.copy()
+    else:
+        _field = np.zeros((max(_top), dummy_env.n_cols))
+        _field[:dummy_env.n_rows, :] = tetris_state.field.copy()
+    turn = tetris_state.turn + 1
+    for i in range(dummy_env.piece_width[tetris_state.next_piece][orient]):
+        for h in range(_height + dummy_env.piece_bottom[tetris_state.next_piece][orient][i],
+                       _height + dummy_env.piece_top[tetris_state.next_piece][orient][i]):
+            _field[h, i+slot] = turn
     # complete and eroded
     counter_complete_lines = 0
     counter_contribution = 0
@@ -132,7 +176,7 @@ def bcts_featurizer(tetris_state, action):
 
     # binary the field
     bi_field = np.where(_field != 0, 1, 0)
-    count_holes = np.sum(bi_field[1:] - bi_field[:-1] == 1)
+    count_holes = _top.sum() - bi_field.sum()# np.sum(bi_field[1:] - bi_field[:-1] == 1)
 
     # row holes
     row_holes = (bi_field[1:] - bi_field[:-1] == 1)
@@ -206,7 +250,7 @@ def dellacherie_featurizer(tetris_state, action):
 
     # binary the field
     bi_field = np.where(_field != 0, 1, 0)
-    count_holes = np.sum(bi_field[1:] - bi_field[:-1] == 1)
+    count_holes = _top.sum() - bi_field.sum()# np.sum(bi_field[1:] - bi_field[:-1] == 1)
 
     return [count_holes,
             _height,            # landing_height
@@ -311,6 +355,7 @@ def print_state(state, ac):
     print(simple_featurizer(state,ac))
     print(dellacherie_featurizer(state, ac))
     print(bcts_featurizer(state, ac))
+    print(column_featurizer(state, ac))
 
 if __name__ == '__main__':
     env = TetrisEnv()
