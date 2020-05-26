@@ -46,7 +46,7 @@ class DQN(Agent):
         return actions[np.argmax(s @ good_agent)]
 
     def train(self, n_iter, train_every_iter, batch_size, cb_every_iter, discount = 0.95,
-              epsilon=.9, epsilon_decay=(256, 0.2, 0.1),
+              epsilon=.95, epsilon_decay=(128, 0.1, 0.05),
               expert_traj=0, warm_up_episodes=0, warm_up_epochs=1,
               pdb_per_iter=10000000, sample_per_iter=256):
 
