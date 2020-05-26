@@ -10,7 +10,7 @@ from datetime import datetime
 from torch.utils.tensorboard import SummaryWriter
 
 class DQN(Agent):
-    def __init__(self, featurizer, net_size=[32,32],lr=0.00015):
+    def __init__(self, featurizer, net_size=[32,32],lr=0.001, name=''):
         super(DQN, self).__init__(featurizer)
         self.buffer = ReplayBuffer(self, self.N, featurizer)
         self.device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
@@ -26,7 +26,7 @@ class DQN(Agent):
                                     lr=lr)
         self.loss_fn = nn.MSELoss()
 
-        self.name = 'sample256-warmup.net={}.lr={}'.format('x'.join([str(a) for a in self.net_size]), lr)
+        self.name = '{}.net={}.lr={}'.format(name, 'x'.join([str(a) for a in self.net_size]), lr)
         self.run_name = 'runs/{}-{}'.format(self.name,
             datetime.now().strftime("%m%d-%H-%M-%S"))
         self.writer = SummaryWriter(self.run_name)
@@ -46,15 +46,17 @@ class DQN(Agent):
         return actions[np.argmax(s @ good_agent)]
 
     def train(self, n_iter, train_every_iter, batch_size, cb_every_iter, discount = 0.95,
-              epsilon=.95, epsilon_decay=(128, 0.1, 0.05),
+              epsilon=(128, 0.1, 0.05),
               expert_traj=10, warm_up_episodes=1000, warm_up_epochs=1,
-              pdb_per_iter=10000000, sample_per_iter=512):
+              pdb_per_iter=10000000, sample_per_iter=2048):
+
+        epsilon, epsilon_decay = epsilon[0], list(epsilon[1:])
 
         if expert_traj > 0:
             if os.path.exists('Expert_buffer_{}.pth'.format(expert_traj)):
                 self.buffer.load('Expert_buffer_{}.pth'.format(expert_traj))
                 print('Loaded expert demo.')
-            elif expert_traj > 0:
+            else:
                 print('Collecting expert demonstrations')
                 for _ in tqdm(range(expert_traj)):
                     tetris_state = self.env.reset()
@@ -110,16 +112,17 @@ class DQN(Agent):
                 self.buffer.store(self.featurizer(tetris_state, ac), ntetris_state, reward, done)
                 tetris_state = ntetris_state
                 if done:
-                    count_game += 1
-                    count_random = 0
-                    total_rew = 0
-                    acc_rews.append(self.env.state.cleared)
                     self.writer.add_scalar('Game/Lines', self.env.state.cleared, count_game)
                     self.writer.add_scalar('Game/Turns', self.env.state.turn, count_game)
                     self.writer.add_scalar('Game/Rews', total_rew, count_game)
                     self.writer.add_scalar('Game/Epsilon', epsilon, count_game)
                     self.writer.add_scalar('Game/ExploreTurns', count_random, count_game)
+                    count_game += 1
+                    count_random = 0
+                    total_rew = 0
+                    acc_rews.append(self.env.state.cleared)
                     tetris_state = self.env.reset()
+                    break
 
             # train
             if self.buffer.can_sample() and _iter % train_every_iter == 0:
@@ -128,15 +131,15 @@ class DQN(Agent):
             # save
             if _iter % cb_every_iter == 0:
                 #print('Iter {} rew {} epsilon {}'.format(_iter, np.average(acc_rews[-cb_every_iter:]), epsilon))
-                if np.average(acc_rews[-20:]) > best_so_far:
+                if np.max(acc_rews[-cb_every_iter:]) > best_so_far:
                     if best_so_far > 0:
                         try:
                             os.remove('{:.2f}'.format(best_so_far))
                         except:
                             pass
-                    best_so_far = np.average(acc_rews[-20:])
+                    best_so_far = np.max(acc_rews[-cb_every_iter:])
                     self.save('{:.2f}'.format(best_so_far))
-                if np.average(acc_rews[-20:]) > 100000:
+                if np.average(acc_rews[-20:]) > 10000:
                     self.save('final')
                     print("Found good agent")
                     return
@@ -145,6 +148,7 @@ class DQN(Agent):
                 epsilon -= epsilon_decay[1]
                 if epsilon < epsilon_decay[2]:
                     epsilon = epsilon_decay[2]
+                print('Decay epsilon to', epsilon)
 
             if _iter > 0 and _iter % pdb_per_iter == 0:
                 import pdb;pdb.set_trace()
@@ -284,6 +288,15 @@ class ReplayBuffer():
 
 if __name__ == '__main__':
     from features import simple_featurizer, dellacherie_featurizer, bcts_featurizer
-    agent = DQN(simple_featurizer)
-    agent.train(500000, 1, 2048, 64)
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--lr', type=float, default=0.001)
+    parser.add_argument('--name', type=str, default='DQN')
+    parser.add_argument('--warmup_episodes', type=int, default=0)
+    parser.add_argument('--epsilon', nargs=4, default=(.95, 128, .1, .05))
+    parser.add_argument('--epoch', type=int, default=500000)
+    parser.add_argument('--batch_size', type=int, default=1024)
+    args = parser.parse_args()
+    agent = DQN(simple_featurizer, lr=args.lr, name=args.name)
+    agent.train(args.epoch, 1, args.batch_size, 64, warm_up_episodes=args.warmup_episodes, epsilon=args.epsilon)
     agent.save()
