@@ -1,0 +1,35 @@
+# Tetris
+
+## Set up env
+
+Install pytorch
+pip install numpy scipy tqdm matplotlib
+
+## Train CMA-ES
+
+python cmaes.py
+
+## Train DQN
+
+python dqn.py
+
+## Env
+
+All in tetris.py
+
+## Featurizer
+
+featurizer.py extracts state representation from tetris game. Implemented
+- sum of column height
+- number of holes
+- bumpiness of wall
+- number of lines to complete
+- dellacherie_featurizer:
+- landing height
+- row transitions
+- col transitions
+- well depth
+- BCTS_featurizer:
+- eroded pieces
+- hole depth
+- row holes
