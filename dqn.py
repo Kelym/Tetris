@@ -50,28 +50,22 @@ class DQN(Agent):
               expert_traj=10, warm_up_episodes=1000, warm_up_epochs=1,
               pdb_per_iter=10000000, sample_per_iter=512):
 
-        if expert_traj > 0 and os.path.exists('Expert_buffer_{}.pth'.format(expert_traj)):
-            self.buffer.load('Expert_buffer_{}.pth'.format(expert_traj))
-            print('Loaded expert demo.')
-        elif expert_traj > 0:
-            print('Collecting expert demonstrations')
-            for _ in tqdm(range(expert_traj)):
-                tetris_state = self.env.reset()
-                while True:
-                    ac = self.good_agent_act()
-                    ntetris_state, reward, done, _ = self.env.step(ac)
-                    self.buffer.store(self.featurizer(tetris_state, ac), ntetris_state, reward, done)
-                    tetris_state = ntetris_state
-                    if done: break
-            self.buffer.save('Expert_buffer_{}.pth'.format(expert_traj))
-
-        '''
-        try:
-            self.load()
-            print('Load previous model')
-        except:
-            pass
-        '''
+        if expert_traj > 0:
+            if os.path.exists('Expert_buffer_{}.pth'.format(expert_traj)):
+                self.buffer.load('Expert_buffer_{}.pth'.format(expert_traj))
+                print('Loaded expert demo.')
+            elif expert_traj > 0:
+                print('Collecting expert demonstrations')
+                for _ in tqdm(range(expert_traj)):
+                    tetris_state = self.env.reset()
+                    while True:
+                        ac = self.good_agent_act()
+                        ntetris_state, reward, done, _ = self.env.step(ac)
+                        self.buffer.store(self.featurizer(tetris_state, ac), ntetris_state, reward, done)
+                        tetris_state = ntetris_state
+                        if done: break
+                self.buffer.save('Expert_buffer_{}.pth'.format(expert_traj))
+            print('Expert filled {} of buffer'.format(self.buffer.num_in_buffer))
 
         tetris_state = self.env.reset()
         rollout_count = 0
@@ -120,13 +114,12 @@ class DQN(Agent):
                     count_random = 0
                     total_rew = 0
                     acc_rews.append(self.env.state.cleared)
+                    self.writer.add_scalar('Game/Lines', self.env.state.cleared, count_game)
+                    self.writer.add_scalar('Game/Turns', self.env.state.turn, count_game)
+                    self.writer.add_scalar('Game/Rews', total_rew, count_game)
+                    self.writer.add_scalar('Game/Epsilon', epsilon, count_game)
+                    self.writer.add_scalar('Game/ExploreTurns', count_random, count_game)
                     tetris_state = self.env.reset()
-                    break
-            self.writer.add_scalar('Game/Lines', self.env.state.cleared, count_game)
-            self.writer.add_scalar('Game/Turns', self.env.state.turn, count_game)
-            self.writer.add_scalar('Game/Rews', total_rew, count_game)
-            self.writer.add_scalar('Game/Epsilon', epsilon, count_game)
-            self.writer.add_scalar('Game/ExploreTurns', count_random, count_game)
 
             # train
             if self.buffer.can_sample() and _iter % train_every_iter == 0:
@@ -134,7 +127,7 @@ class DQN(Agent):
 
             # save
             if _iter % cb_every_iter == 0:
-                print('Iter {} rew {} epsilon {}'.format(_iter, np.average(acc_rews[-cb_every_iter:]), epsilon))
+                #print('Iter {} rew {} epsilon {}'.format(_iter, np.average(acc_rews[-cb_every_iter:]), epsilon))
                 if np.average(acc_rews[-20:]) > best_so_far:
                     if best_so_far > 0:
                         try:
