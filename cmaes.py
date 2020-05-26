@@ -23,7 +23,7 @@ def sample_tetris(sample_params, featurizer, sample_len):
         return actions[np.argmax(values)]
 
     env = TetrisEnv()
-    #sample_pieces = np.random.randint(env.n_pieces, size=sample_len)
+    sample_pieces = np.random.randint(env.n_pieces, size=sample_len)
     m = len(sample_params)
     r, h = sample_len
     sample_scores = np.zeros((m, r))
@@ -35,8 +35,8 @@ def sample_tetris(sample_params, featurizer, sample_len):
             env.reset()
             rollout_reward = 0
             rollout_len = 0
-            #for _p in sample_pieces[j]:
-            for _ in range(h):
+            for _p in sample_pieces[j]:
+            #for _ in range(h):
                 #env.state.next_piece = _p
                 #env.render()
                 #time.sleep(0.1)
@@ -58,7 +58,7 @@ class CMAES(Agent):
         self.params = np.zeros(self.N)
         self.eval = self.eval_tetris
 
-    def eval_tetris(self, sample_params, num_processes=14, sample_len=(4, 400000)):
+    def eval_tetris(self, sample_params, num_processes=16, sample_len=(6, 400000)):
         sample_scores, sample_clears, sample_lens = [], [], []
         pool = Pool(processes=num_processes)
         results = [pool.apply_async(sample_tetris, args=(sample_params, self.featurizer, sample_len)) for _ in range(num_processes)]
@@ -73,14 +73,11 @@ class CMAES(Agent):
         sample_scores = np.average(sample_scores, axis=1)
         sample_clears = np.average(sample_clears,axis=1)
         sample_lens = np.average(sample_lens,axis=1)
-        #import pdb;pdb.set_trace()
         return sample_scores, {'sample_clears': sample_clears, 'sample_lens':sample_lens}
 
     def eval_toy(self, sample_params):
-        # ??? Seems to work
-        ground_truth = np.array([10, 10])
-        def f(x):
-            return - np.linalg.norm(x - ground_truth)
+        ground_truth = np.array([0.5, 0.5])
+        def f(x): return - np.linalg.norm(x - ground_truth)
         sample_scores = np.array([f(x) for x in sample_params])
         return sample_scores, None
 
@@ -90,10 +87,8 @@ class CMAES(Agent):
         sel = m // 2
 
         # Weights
-        # linear weights
         # weights = np.array([sel + 1 - i for i in range(sel)]) # linear weights
-        # superlinear weights
-        weights = np.log(sel + 0.5) - np.log(np.arange(1, sel+1))
+        weights = np.log(sel + 0.5) - np.log(np.arange(1, sel+1)) # superlinear weights, avoid negative
         weights = weights / np.sum(weights)
         ueff = 1. / np.sum(weights ** 2)
         print("lambda = {}, sel = {}, w = {}, ueff = {}".format(m, sel, weights, ueff))
@@ -102,7 +97,7 @@ class CMAES(Agent):
         ps = np.zeros(n)
         pc = np.zeros(n)
         chiN = np.sqrt(n) * (1- 1./(4*n) + 1./(21 * (n ** 2)))
-        # Hansen's Table 1
+        # Hansen's Table 1, page 31 from tutorial
         cs = (ueff + 2) / (n + ueff + 5)
         ds = 1 + 2 * max(0, np.sqrt((ueff - 1)/(n+1))-1) + cs
         cc = (4 + ueff / n) / (n + 4 + 2 * ueff / n)
@@ -125,19 +120,22 @@ class CMAES(Agent):
             sel_ind = sort_ind[:sel]
             old_mean = mean.copy()
             mean = np.average(sample_params[sel_ind], axis=0, weights=weights)
-            y = np.average(z[sel_ind], axis=0, weights=weights)
+            z_ = (sample_params[sel_ind] - mean) / sigma
+            y = np.average(z_, axis=0, weights=weights)
             Dsquare, B = np.linalg.eigh(cov)
             invsqrtC = B @ (1./np.sqrt(Dsquare) * B.T)
             ps = (1 - cs) * ps + np.sqrt(cs * (2-cs) * ueff) * invsqrtC @ y
-            hs = 1 if np.linalg.norm(ps) < (1.4 + 2/(n+1) * chiN) * np.sqrt(1 - (1-cs) ** (2 * (_iter+1))) else 0
+            hs = 1 if np.linalg.norm(ps) < ((1.4 + 2/(n+1)) * chiN * np.sqrt(1 - (1-cs) ** (2 * (_iter+2)))) else 0
             pc = (1 - cc) * pc + hs * np.sqrt(cc * (2-cc) * ueff) * y
             sigma *= np.exp(cs / ds * (np.linalg.norm(ps) / chiN - 1 ))
-            ncov = (z[sel_ind] * weights[:,None]).T @ z[sel_ind]
-            cov = (1 - c1 - cu) * cov + c1 * pc @ pc.T + cu * ncov
+            ncov = (z_ * weights[:,None]).T @ z_
+            cov = (1 + c1 * (1-hs) * cc (2-cc) - c1 - cu) * cov + c1 * pc @ pc.T + cu * ncov
 
             #print(mean, sigma, cov)
             info['sel_ind'] = sel_ind
             if callback_per_iter(_iter, sample_params, sample_scores, info):
+                print('Stopping criteria reached')
+                self.save()
                 break
 
             sample_clears = info['sample_clears']
@@ -188,7 +186,7 @@ def gen_cb_toy():
 def callback_tetris(_iter, sample_params, sample_scores, info):
     #import pdb;pdb.set_trace()
     print('Iter {} \t Cleared {:.2f} \t Len {:.2f}'.format(_iter, np.average(info['sample_clears']), np.average(info['sample_lens'])))
-    print('Best performing cleared {} and lasted {}'.format(info['sample_clears'][info['sel_ind'][0]], info['sample_lens'][info['sel_ind'][0]]))
+    print('Best cleared {} and lasted {}'.format(np.max(info['sample_clears']), np.max(info['sample_lens'])))
     print('Best params: {}'.format(sample_params[info['sel_ind'][0]]))
     # Stopping criteria
     if info['sample_clears'][info['sel_ind'][0]] >= 10000:
@@ -197,7 +195,7 @@ def callback_tetris(_iter, sample_params, sample_scores, info):
 
 if __name__ == '__main__':
     from features import simple_featurizer, dellacherie_featurizer, bcts_featurizer
-    player = CMAES(simple_featurizer)
+    player = CMAES(bcts_featurizer)
 
     # Toy
     #player.N = 2
@@ -205,7 +203,6 @@ if __name__ == '__main__':
     #player.train(gen_cb_toy(), m=64, mean=np.random.uniform(0, 10, n), sigma=0.3)
 
     init_mean = np.zeros(player.N)
-    #init_mean = np.array([-0.510066, -0.35663, -0.184483, 0.760666]) # some parameters I found online, avg lines cleared 500 in 20
-    player.train(callback_tetris, m=12, mean=init_mean, sigma=0.2)
-    player.save()
-
+    m = int(4 + 3 * log(player.N))
+    player.train(callback_tetris, m=m, mean=init_mean, sigma=0.5)
+    print('Finished!')
