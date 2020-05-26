@@ -26,7 +26,7 @@ class DQN(Agent):
                                     lr=lr)
         self.loss_fn = nn.MSELoss()
 
-        self.name = 'sample256-warmup.net={}.lr={}'.format('x'.join([str(a) for a in self.net_size]), lr)
+        self.name = 'sample256.net={}.lr={}'.format('x'.join([str(a) for a in self.net_size]), lr)
         self.run_name = 'runs/{}-{}'.format(self.name,
             datetime.now().strftime("%m%d-%H-%M-%S"))
         self.writer = SummaryWriter(self.run_name)
@@ -47,7 +47,7 @@ class DQN(Agent):
 
     def train(self, n_iter, train_every_iter, batch_size, cb_every_iter, discount = 0.95,
               epsilon=.9, epsilon_decay=(256, 0.2, 0.1),
-              expert_traj=10, warm_up_episodes=500, warm_up_epochs=1,
+              expert_traj=0, warm_up_episodes=0, warm_up_epochs=1,
               pdb_per_iter=10000000, sample_per_iter=256):
 
         if expert_traj > 0 and os.path.exists('Expert_buffer_{}.pth'.format(expert_traj)):
