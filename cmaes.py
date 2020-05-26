@@ -29,7 +29,8 @@ def sample_tetris(sample_params, featurizer, sample_len):
     sample_scores = np.zeros((m, r))
     sample_lens = np.zeros((m, r))
     sample_clears = np.zeros((m, r))
-    for i in tqdm(range(m)):
+    #for i in tqdm(range(m)):
+    for i in range(m):
         param = sample_params[i]
         for j in range(r):
             env.reset()
@@ -129,15 +130,10 @@ class CMAES(Agent):
             pc = (1 - cc) * pc + hs * np.sqrt(cc * (2-cc) * ueff) * y
             sigma *= np.exp(cs / ds * (np.linalg.norm(ps) / chiN - 1 ))
             ncov = (z_ * weights[:,None]).T @ z_
-            cov = (1 + c1 * (1-hs) * cc (2-cc) - c1 - cu) * cov + c1 * pc @ pc.T + cu * ncov
+            cov = (1 + c1 * (1-hs) * cc * (2-cc) - c1 - cu) * cov + c1 * pc @ pc.T + cu * ncov
 
             #print(mean, sigma, cov)
             info['sel_ind'] = sel_ind
-            if callback_per_iter(_iter, sample_params, sample_scores, info):
-                print('Stopping criteria reached')
-                self.save()
-                break
-
             sample_clears = info['sample_clears']
             if sample_clears[sel_ind[0]] > best_so_far + 100:
                 if best_so_far > -float('inf'):
@@ -145,6 +141,11 @@ class CMAES(Agent):
                 self.params = sample_params[sel_ind[0]]
                 best_so_far = sample_clears[sel_ind[0]]
                 self.save('{}.csv'.format(best_so_far))
+
+            if callback_per_iter(_iter, sample_params, sample_scores, info):
+                print('Stopping criteria reached')
+                self.save()
+                break
 
         self.params = sample_params[sel_ind[0]]
 
@@ -189,7 +190,7 @@ def callback_tetris(_iter, sample_params, sample_scores, info):
     print('Best cleared {} and lasted {}'.format(np.max(info['sample_clears']), np.max(info['sample_lens'])))
     print('Best params: {}'.format(sample_params[info['sel_ind'][0]]))
     # Stopping criteria
-    if info['sample_clears'][info['sel_ind'][0]] >= 10000:
+    if info['sample_clears'][info['sel_ind'][0]] >= 15000:
         print('Found a set of good parameters!')
         return True
 
@@ -203,6 +204,6 @@ if __name__ == '__main__':
     #player.train(gen_cb_toy(), m=64, mean=np.random.uniform(0, 10, n), sigma=0.3)
 
     init_mean = np.zeros(player.N)
-    m = int(4 + 3 * log(player.N))
+    m = int(4 + 3 * np.log(player.N))
     player.train(callback_tetris, m=m, mean=init_mean, sigma=0.5)
     print('Finished!')
