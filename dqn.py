@@ -283,7 +283,7 @@ class ReplayBuffer():
             start_idx += batch_size
 
 if __name__ == '__main__':
-    from features import simple_featurizer, dellacherie_featurizer, bcts_featurizer
+    from features import simple_featurizer, dellacherie_featurizer, bcts_featurizer, column_featurizer
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('--lr', type=float, default=0.001)
@@ -293,6 +293,6 @@ if __name__ == '__main__':
     parser.add_argument('--epoch', type=int, default=500000)
     parser.add_argument('--batch_size', type=int, default=1024)
     args = parser.parse_args()
-    agent = DQN(simple_featurizer, lr=args.lr, name=args.name)
+    agent = DQN(bcts_featurizer, net_size=[], lr=args.lr, name=args.name)
     agent.train(args.epoch, 1, args.batch_size, 64, warm_up_episodes=args.warmup_episodes, epsilon=args.epsilon)
     agent.save()
