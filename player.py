@@ -4,11 +4,10 @@ import numpy as np
 from envs.tetris import TetrisEnv
 from tqdm import tqdm
 
-N = 40
+N = 100
 
-player = CMAES(simple_featurizer)
-player.load('4065.5.csv')
-player.params = np.array([-0.510066, -0.35663, -0.184483, 0.760666])
+player = CMAES(bcts_featurizer)
+player.load('CMAES.csv')
 
 lines = []
 env = TetrisEnv()
