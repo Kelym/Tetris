@@ -322,26 +322,7 @@ def row_hole(tetris_state):
     holes = (bi_field[1:] - bi_field[:-1] == 1)
     return np.any(holes, axis=1).sum()
 
-'''
-def simple_featurizer(tetris_state, action):
-    return np.array([agg_height(tetris_state),
-                     complete_lines(tetris_state, action),
-                     count_holes(tetris_state),
-                     wall_bump(tetris_state)])
-
-def dellacherie_featurizer(tetris_state, action):
-    return np.array([count_holes(tetris_state),
-                     landing_height(tetris_state, action),
-                     row_transitions(tetris_state),
-                     col_transitions(tetris_state),
-                     wall_cumu(tetris_state),
-                     eroded_pieces(tetris_state, action)])
-
-def bcts_featurizer(tetris_state, action):
-    return np.concatenate(
-            (dellacherie_featurizer(tetris_state, action),
-             [hole_depth(tetris_state),row_hole(tetris_state)]))
-'''
+##############################################
 
 def print_state(state, ac):
     print('agg height\t', agg_height(state))
