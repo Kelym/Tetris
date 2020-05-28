@@ -44,49 +44,12 @@ class DQN(Agent):
     def _to_tensor(self, array):
         return torch.tensor(array).float().to(self.device)
 
-    def good_agent_act(self):
-        actions = self.env.get_actions()
-        s = np.array([self.featurizer(self.env.state, ac) for ac in actions])
-        good_agent = np.array([
-            -4.747564027773860107e-01,
-            -7.556967504203945252e-01,
-            -2.838401051859257840e-01,
-            3.506616233835331276e-01])
-        return actions[np.argmax(s @ good_agent)]
-
     def train(self, n_iter, train_every_iter, batch_size, cb_every_iter, discount = 0.99,
               epsilon=(128, 0.1, 0.05),
-              expert_traj=10, warm_up_episodes=1000, warm_up_epochs=1,
               update_target_every_iter=100, sample_per_iter=2048):
 
         epsilon = [float(e) for e in epsilon]
         epsilon, epsilon_decay = epsilon[0], list(epsilon[1:])
-
-        # Load expert demo
-        if expert_traj > 0:
-            if os.path.exists('Expert_buffer_{}.pth'.format(expert_traj)):
-                self.buffer.load('Expert_buffer_{}.pth'.format(expert_traj))
-                print('Loaded expert demo.')
-            else:
-                print('Collecting expert demonstrations')
-                for _ in tqdm(range(expert_traj)):
-                    tetris_state = self.env.reset()
-                    while True:
-                        ac = self.good_agent_act()
-                        ntetris_state, reward, done, _ = self.env.step(ac)
-                        self.buffer.store(self.featurizer(tetris_state, ac), ntetris_state, reward, done)
-                        tetris_state = ntetris_state
-                        if done: break
-                self.buffer.save('Expert_buffer_{}.pth'.format(expert_traj))
-            print('Expert filled {} of buffer'.format(self.buffer.num_in_buffer))
-
-        # Warm up net
-        tetris_state = self.env.reset()
-        rollout_count = 0
-        for _iter in tqdm(range(warm_up_episodes)):
-            for j in range(warm_up_epochs):
-                for data in self.buffer.iterator(batch_size):
-                    self.train_step(_iter*warm_up_epochs + j, data, discount, 'Loss/WarmUp')
 
         # Train DQN
         acc_rews = []
@@ -286,13 +249,13 @@ if __name__ == '__main__':
     from features import simple_featurizer, dellacherie_featurizer, bcts_featurizer, column_featurizer
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('--lr', type=float, default=0.001)
+    parser.add_argument('--lr', type=float, default=0.0003)
     parser.add_argument('--name', type=str, default='DQN')
     parser.add_argument('--warmup_episodes', type=int, default=0)
     parser.add_argument('--epsilon', nargs=4, default=(.95, 128, .1, .05))
     parser.add_argument('--epoch', type=int, default=500000)
     parser.add_argument('--batch_size', type=int, default=1024)
     args = parser.parse_args()
-    agent = DQN(bcts_featurizer, net_size=[], lr=args.lr, name=args.name)
-    agent.train(args.epoch, 1, args.batch_size, 64, warm_up_episodes=args.warmup_episodes, epsilon=args.epsilon)
+    agent = DQN(bcts_featurizer, net_size=[32,32], lr=args.lr, name=args.name)
+    agent.train(args.epoch, 1, args.batch_size, 64, epsilon=args.epsilon)
     agent.save()
