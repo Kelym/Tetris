@@ -4,7 +4,7 @@ import numpy as np
 from envs.tetris import TetrisEnv
 from tqdm import tqdm
 
-N = 100
+N = 20
 
 player = CMAES(bcts_featurizer)
 player.load('CMAES.csv')
@@ -16,8 +16,8 @@ for i in range(N):
     env.reset()
     while not done and env.state.cleared < 100000:
         _, reward, done, info = env.step(player.act(env.state))
-    print(env.state.cleared)
     lines.append(env.state.cleared)
+    print(env.state.cleared, 'moving avg', np.average(lines))
 
 print('{} games played'.format(N))
 print('Avg lines cleared', float(sum(lines)) / N)
